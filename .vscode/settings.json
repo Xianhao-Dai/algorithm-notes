@@ -43,6 +43,10 @@
         "ratio": "cpp",
         "stack": "cpp",
         "variant": "cpp",
-        "map": "cpp"
+        "map": "cpp",
+        "__hash_table": "cpp",
+        "__tree": "cpp",
+        "complex": "cpp",
+        "type_traits": "cpp"
     }
 }

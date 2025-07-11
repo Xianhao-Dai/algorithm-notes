@@ -7,6 +7,8 @@
 
 #define CALCULATOR_DEBUG
 
+#define EPS 1e-9
+
 #ifdef CALCULATOR_DEBUG
 #include<iostream>
 #endif
@@ -17,15 +19,17 @@ struct Token {
         NUMBER,
         PLUS,
         MINUS,
+        OPPOSITE,
         MULTIPLY,
         DIVIDE,
         POWER,
         LBRACKET,
         RBRACKET,
     } type;
-    std::string originText;
 
-    explicit Token(TokenType type, std::string originText) : type(type), originText(originText){
+    std::string origin_text;
+
+    explicit Token(TokenType type, std::string origin_text) : type(type), origin_text(origin_text) {
     }
 };
 
@@ -34,6 +38,7 @@ public:
     static std::vector<Token> tokenize(std::string expr) {
         std::vector<Token> tokens;
         static const std::vector<std::pair<Token::TokenType, std::regex>> rules = {
+            {Token::NONE, std::regex(R"(\s+)")},
             {Token::NUMBER, std::regex(R"(\d+(?:\.\d+)?)")},
             {Token::PLUS,     std::regex(R"(\+)")},
             {Token::MINUS,     std::regex(R"(-)")},
@@ -55,14 +60,21 @@ public:
                     std::cout << "REGEX MATCHED, TYPE:" << rule.first << " ORIGIN TEXT:" << m[0].str() << std::endl;
                     #endif
                     offset += m[0].str().length();
-                    Token token(rule.first, m[0].str());
-                    tokens.push_back(token);
+                    if (rule.first != Token::NONE) {
+                        Token token(rule.first, m[0].str());
+                        tokens.push_back(token);
+                    }
                     is_success = true;
                     break;
                 }
             }
             if (!is_success) {
-                throw std::invalid_argument("INVALID EXPR - NO RULE MATCHED");
+                throw std::logic_error("[LOGIC ERROR] INVALID EXPR: NO RULE MATCHED");
+            }
+        }
+        for (int i = 0;i < tokens.size();i++) {
+            if (tokens[i].type == Token::MINUS) {
+                
             }
         }
         return tokens;
@@ -72,132 +84,129 @@ public:
 class Calculator {
 public:
     static double calculate(std::string expr) {
-        std::vector<Token> tokens = Lexer::tokenize(expr);
-        std::stack<Token> operands;
-        std::stack<Token> operators;
-        Token eof(Token::NONE, "");
-        operators.push(eof);
-        for (auto token : tokens) {
-            if (token.type == Token::NUMBER) {
-                operands.push(token);
+        tokens = Lexer::tokenize(expr);
+        return calculate(0, tokens.size() - 1);
+    }
+private:
+    inline static std::vector<Token> tokens;
+
+    inline static const std::map<Token::TokenType, int> priority_map = {
+        {Token::PLUS, 0},
+        {Token::MINUS, 0},
+        {Token::MULTIPLY, 1},
+        {Token::DIVIDE, 1},
+        {Token::POWER, 2},
+    };
+
+    inline static const std::map<Token::TokenType, int> arity_map = {
+        {Token::OPPOSITE, 1},
+        {Token::PLUS, 2},
+        {Token::MINUS, 2},
+        {Token::MULTIPLY, 2},
+        {Token::DIVIDE, 2},
+        {Token::POWER, 2},
+    };
+
+    static double calculate(int p, int q) {
+        if (p > q) {
+            throw std::logic_error("[LOGIC ERROR] INVALID PARSE: INVALID BOUNDARY");
+        } else if (p == q) {
+            if (tokens[p].type == Token::NUMBER) {
+                return stod(tokens[p].origin_text);
             } else {
-                Token op = operators.top();
-                if (isp_map.at(op.type) > icp_map.at(token.type)) {
-                    while (isp_map.at(op.type) > icp_map.at(token.type) && !operators.empty()) {
-                        Token operand_1 = operands.top();
-                        operands.pop();
-                        Token operand_2 = operands.top();
-                        operands.pop();
-                        operators.pop();
-                        Token res = calculate(operand_2, operand_1, op);
-                        operands.push(res);
-                        #ifdef CALCULATOR_DEBUG
-                        std::cout << "OPERANDS CALCULATED, OPERAND_1:" << operand_1.originText
-                        << " OPERAND_2:" << operand_2.originText
-                        << " OP:" << op.originText
-                        << " RES:" << res.originText 
-                        << std::endl;
-                        #endif
-                        op = operators.top();
-                    }
-                    if (isp_map.at(op.type) == icp_map.at(token.type)) {
-                        operators.pop();
-                    } else {
-                        operators.push(token);
-                    }
-                } else if (isp_map.at(op.type) == icp_map.at(token.type)) {
-                    operators.pop();
-                } else {
-                    operators.push(token);
+                throw std::logic_error("[LOGIC ERROR] INVALID PARSE: SINGLE TOKEN NOT BE A NUMBER");
+            }
+        } else {
+            bool is_legal = true;
+            bool has_parentheses = check_parentheses(p, q, is_legal);
+            if (!is_legal) {
+                throw std::logic_error("[LOGIC ERROR] INVALID PARSE: PARENTHESES NOT PAIRED");
+            }
+            if (has_parentheses) {
+                return calculate(p + 1, q - 1);
+            }
+            int op_index = find_main_op(p, q);
+            Token token = tokens[op_index];
+            if (arity_map.at(token.type) == 1) {
+                double val = calculate(op_index + 1, q);
+                return calculate(token, val);
+            } else if (arity_map.at(token.type) == 2) {
+                double val_1 = calculate(p, op_index - 1);
+                double val_2 = calculate(op_index + 1, q);
+                return calculate(token, val_1, val_2);
+            }
+            throw std::logic_error("[LOGIC ERROR] INVALID PARSE: INVALID OPERATOR");
+        }
+    }
+
+    static int find_main_op(int p, int q) {
+        int min_priority = INT_MAX;
+        int op_index = -1;
+        int brackets = 0;
+        for (int index = p;index <= q;index++) {
+            Token::TokenType type = tokens[index].type;
+            if (priority_map.find(type) != priority_map.end() && brackets == 0) {
+                int priority = priority_map.at(type);
+                if (priority <= min_priority) {
+                    min_priority = priority;
+                    op_index = index;
+                }
+            } else if (type == Token::LBRACKET) {
+                brackets++;
+            } else if (type == Token::RBRACKET) {
+                brackets--;
+            }
+        }
+        return op_index;
+    }
+
+    static bool check_parentheses(int p, int q, bool& is_legal) {
+        is_legal = true;
+        int brackets = 0;
+        for (int i = p;i <= q;i++) {
+            if (tokens[i].type == Token::LBRACKET) {
+                brackets++;
+            } else if (tokens[i].type == Token::RBRACKET) {
+                brackets--;
+                if (brackets < 0) {
+                    is_legal = false;
                 }
             }
         }
-        while (operators.top().type != Token::NONE) {
-            Token operand_1 = operands.top();
-            operands.pop();
-            Token operand_2 = operands.top();
-            operands.pop();
-            Token op = operators.top();
-            operators.pop();
-            Token res = calculate(operand_2, operand_1, op);
-            operands.push(res);
-            #ifdef CALCULATOR_DEBUG
-            std::cout << "OPERANDS CALCULATED, OPERAND_1:" << operand_1.originText
-            << " OPERAND_2:" << operand_2.originText
-            << " OP:" << op.originText
-            << " RES:" << res.originText 
-            << std::endl;
-            #endif
+        if (brackets != 0) {
+            is_legal = false;
         }
-        return stod(operands.top().originText);
+        return is_legal && tokens[p].type == Token::LBRACKET && tokens[q].type == Token::RBRACKET;
     }
-private:
-    static Token calculate(Token operand_1, Token operand_2, Token op) {
-        double a = stod(operand_1.originText);
-        double b = stod(operand_2.originText);
-        double res = 0;
+
+    static double calculate(Token op, double val_1, double val_2 = 0) {
         switch (op.type)
         {
+        case Token::OPPOSITE:
+            return -val_1;
         case Token::PLUS:
-            res = a + b;
-            break;
+            return val_1 + val_2;
         case Token::MINUS:
-            res = a - b;
-            break;
+            return val_1 - val_2;
         case Token::MULTIPLY:
-            res = a * b;
-            break;
+            return val_1 * val_2;
         case Token::DIVIDE:
-            res = a / b;
-            break;
+            if (fabs(val_2) < EPS) {
+                throw std::logic_error("[LOGIC ERROR] INVALID EXPR: DIVIDED BY ZERO");
+            }
+            return val_1 / val_2;
         case Token::POWER:
-            res = pow(a, b);
-            break;
+            return pow(val_1, val_2);
         default:
-            break;
+            throw std::logic_error("[LOGIC ERROR] INVALID EXPR: INVALID OPERATOR");
         }
-        return Token(Token::NUMBER, std::to_string(res));
+        return 0;
     }
-
-    enum PRIORITY {
-        PRIORITY_MIN = INT_MIN,
-        PRIORITY_0 = 0,
-        PRIORITY_1 = 1,
-        PRIORITY_2 = 2,
-        PRIORITY_3 = 3,
-        PRIORITY_4 = 4,
-        PRIORITY_5 = 5,
-        PRIORITY_6 = 6,
-        PRIORITY_7 = 7,
-        PRIORITY_MAX = INT_MAX,
-    } type;
-
-    inline static const std::map<Token::TokenType, PRIORITY> icp_map = {
-        {Token::NONE, PRIORITY_MIN},
-        {Token::PLUS, PRIORITY_1},
-        {Token::MINUS, PRIORITY_1},
-        {Token::MULTIPLY, PRIORITY_3},
-        {Token::DIVIDE, PRIORITY_3},
-        {Token::POWER, PRIORITY_5},
-        {Token::LBRACKET, PRIORITY_MAX},
-        {Token::RBRACKET, PRIORITY_0},
-    };
-
-    inline static const std::map<Token::TokenType, PRIORITY> isp_map = {
-        {Token::NONE, PRIORITY_MIN},
-        {Token::PLUS, PRIORITY_2},
-        {Token::MINUS, PRIORITY_2},
-        {Token::MULTIPLY, PRIORITY_4},
-        {Token::DIVIDE, PRIORITY_4},
-        {Token::POWER, PRIORITY_6},
-        {Token::LBRACKET, PRIORITY_0},
-        {Token::RBRACKET, PRIORITY_MAX},
-    };
 };
 
 int main() {
     #ifdef CALCULATOR_DEBUG
-    std::cout << Calculator::calculate("(1/0.32+2.5*8.3)^2");
+    std::cout << Calculator::calculate("1 + 5^2 -2");
     #endif
     return 0;
 }
