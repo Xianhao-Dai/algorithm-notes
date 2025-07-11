@@ -32,6 +32,17 @@
         "memory": "cpp",
         "print": "cpp",
         "string": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "regex": "cpp",
+        "cctype": "cpp",
+        "clocale": "cpp",
+        "cwctype": "cpp",
+        "deque": "cpp",
+        "optional": "cpp",
+        "queue": "cpp",
+        "ratio": "cpp",
+        "stack": "cpp",
+        "variant": "cpp",
+        "map": "cpp"
     }
 }
