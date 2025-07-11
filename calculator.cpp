@@ -26,9 +26,7 @@ struct Token {
         LBRACKET,
         RBRACKET,
     } type;
-
     std::string origin_text;
-
     explicit Token(TokenType type, std::string origin_text) : type(type), origin_text(origin_text) {
     }
 };
@@ -74,7 +72,9 @@ public:
         }
         for (int i = 0;i < tokens.size();i++) {
             if (tokens[i].type == Token::MINUS) {
-                
+                if (i == 0 || tokens[i - 1].type == Token::LBRACKET) {
+                    tokens[i].type = Token::OPPOSITE;
+                }
             }
         }
         return tokens;
@@ -93,6 +93,7 @@ private:
     inline static const std::map<Token::TokenType, int> priority_map = {
         {Token::PLUS, 0},
         {Token::MINUS, 0},
+        {Token::OPPOSITE, 0},
         {Token::MULTIPLY, 1},
         {Token::DIVIDE, 1},
         {Token::POWER, 2},
@@ -206,7 +207,7 @@ private:
 
 int main() {
     #ifdef CALCULATOR_DEBUG
-    std::cout << Calculator::calculate("1 + 5^2 -2");
+    std::cout << Calculator::calculate("-3 + 2.5");
     #endif
     return 0;
 }
