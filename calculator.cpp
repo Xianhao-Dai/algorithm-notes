@@ -23,6 +23,7 @@ struct Token {
         MULTIPLY,
         DIVIDE,
         POWER,
+        PERCENTAGE,
         LBRACKET,
         RBRACKET,
     } type;
@@ -38,11 +39,12 @@ public:
         static const std::vector<std::pair<Token::TokenType, std::regex>> rules = {
             {Token::NONE, std::regex(R"(\s+)")},
             {Token::NUMBER, std::regex(R"(\d+(?:\.\d+)?)")},
-            {Token::PLUS,     std::regex(R"(\+)")},
-            {Token::MINUS,     std::regex(R"(-)")},
-            {Token::MULTIPLY,     std::regex(R"(\*)")},
-            {Token::DIVIDE,     std::regex(R"(/)")},
-            {Token::POWER,     std::regex(R"(\^)")},
+            {Token::PLUS, std::regex(R"(\+)")},
+            {Token::MINUS, std::regex(R"(-)")},
+            {Token::MULTIPLY, std::regex(R"(\*)")},
+            {Token::DIVIDE, std::regex(R"(/)")},
+            {Token::POWER, std::regex(R"(\^)")},
+            {Token::PERCENTAGE, std::regex(R"(%)")},
             {Token::LBRACKET, std::regex(R"(\()")},
             {Token::RBRACKET, std::regex(R"(\))")}
         };
@@ -93,13 +95,15 @@ private:
     inline static const std::map<Token::TokenType, int> priority_map = {
         {Token::PLUS, 0},
         {Token::MINUS, 0},
-        {Token::OPPOSITE, 0},
+        {Token::OPPOSITE, INT_MAX},
+        {Token::PERCENTAGE, INT_MAX},
         {Token::MULTIPLY, 1},
         {Token::DIVIDE, 1},
         {Token::POWER, 2},
     };
 
     inline static const std::map<Token::TokenType, int> arity_map = {
+        {Token::PERCENTAGE, -1},
         {Token::OPPOSITE, 1},
         {Token::PLUS, 2},
         {Token::MINUS, 2},
@@ -128,7 +132,10 @@ private:
             }
             int op_index = find_main_op(p, q);
             Token token = tokens[op_index];
-            if (arity_map.at(token.type) == 1) {
+            if (arity_map.at(token.type) == -1) {
+                double val = calculate(p, op_index - 1);
+                return calculate(token, val);
+            } else if (arity_map.at(token.type) == 1) {
                 double val = calculate(op_index + 1, q);
                 return calculate(token, val);
             } else if (arity_map.at(token.type) == 2) {
@@ -198,6 +205,8 @@ private:
             return val_1 / val_2;
         case Token::POWER:
             return pow(val_1, val_2);
+        case Token::PERCENTAGE:
+            return val_1 / 100.0;
         default:
             throw std::logic_error("[LOGIC ERROR] INVALID EXPR: INVALID OPERATOR");
         }
@@ -207,7 +216,7 @@ private:
 
 int main() {
     #ifdef CALCULATOR_DEBUG
-    std::cout << Calculator::calculate("-3 + 2.5");
+    std::cout << Calculator::calculate("-(3 + (-2.5))%");
     #endif
     return 0;
 }
