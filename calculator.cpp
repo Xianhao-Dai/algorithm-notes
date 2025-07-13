@@ -8,6 +8,7 @@
 #define CALCULATOR_DEBUG
 
 #define EPS 1e-9
+#define PAI 3.1415
 
 #ifdef CALCULATOR_DEBUG
 #include<iostream>
@@ -16,6 +17,7 @@
 struct Token {
     enum TokenType {
         NONE = 0,
+        PI,
         NUMBER,
         PLUS,
         MINUS,
@@ -26,6 +28,10 @@ struct Token {
         PERCENTAGE,
         LBRACKET,
         RBRACKET,
+        COS,
+        SIN,
+        TAN,
+        COT
     } type;
     std::string origin_text;
     explicit Token(TokenType type, std::string origin_text) : type(type), origin_text(origin_text) {
@@ -38,6 +44,7 @@ public:
         std::vector<Token> tokens;
         static const std::vector<std::pair<Token::TokenType, std::regex>> rules = {
             {Token::NONE, std::regex(R"(\s+)")},
+            {Token::PI, std::regex(R"(π)")},
             {Token::NUMBER, std::regex(R"(\d+(?:\.\d+)?)")},
             {Token::PLUS, std::regex(R"(\+)")},
             {Token::MINUS, std::regex(R"(-)")},
@@ -46,7 +53,11 @@ public:
             {Token::POWER, std::regex(R"(\^)")},
             {Token::PERCENTAGE, std::regex(R"(%)")},
             {Token::LBRACKET, std::regex(R"(\()")},
-            {Token::RBRACKET, std::regex(R"(\))")}
+            {Token::RBRACKET, std::regex(R"(\))")},
+            {Token::COS, std::regex(R"(cos)")},
+            {Token::SIN, std::regex(R"(sin)")},
+            {Token::TAN, std::regex(R"(tan)")},
+            {Token::COT, std::regex(R"(cot)")},
         };
         std::smatch m;
         auto front = expr.cbegin();
@@ -77,6 +88,11 @@ public:
                 if (i == 0 || tokens[i - 1].type == Token::LBRACKET) {
                     tokens[i].type = Token::OPPOSITE;
                 }
+            } else if (tokens[i].type == Token::PI) {
+                if (i > 0 && tokens[i - 1].type == Token::NUMBER) {
+                    Token mult(Token::MULTIPLY, "*");
+                    tokens.insert(tokens.begin() + i, mult);
+                }
             }
         }
         return tokens;
@@ -100,11 +116,19 @@ private:
         {Token::MULTIPLY, 1},
         {Token::DIVIDE, 1},
         {Token::POWER, 2},
+        {Token::COS, INT_MAX},
+        {Token::SIN, INT_MAX},
+        {Token::TAN, INT_MAX},
+        {Token::COT, INT_MAX},
     };
 
     inline static const std::map<Token::TokenType, int> arity_map = {
         {Token::PERCENTAGE, -1},
         {Token::OPPOSITE, 1},
+        {Token::COS, 1},
+        {Token::SIN, 1},
+        {Token::TAN, 1},
+        {Token::COT, 1},
         {Token::PLUS, 2},
         {Token::MINUS, 2},
         {Token::MULTIPLY, 2},
@@ -118,6 +142,8 @@ private:
         } else if (p == q) {
             if (tokens[p].type == Token::NUMBER) {
                 return stod(tokens[p].origin_text);
+            } else if (tokens[p].type == Token::PI) {
+                return PAI;
             } else {
                 throw std::logic_error("[LOGIC ERROR] INVALID PARSE: SINGLE TOKEN NOT BE A NUMBER");
             }
@@ -207,6 +233,14 @@ private:
             return pow(val_1, val_2);
         case Token::PERCENTAGE:
             return val_1 / 100.0;
+        case Token::COS:
+            return cos(val_1);
+        case Token::SIN:
+            return sin(val_1);
+        case Token::TAN:
+            return tan(val_1);
+        case Token::COT:
+            return 1 / tan(val_1);
         default:
             throw std::logic_error("[LOGIC ERROR] INVALID EXPR: INVALID OPERATOR");
         }
@@ -216,7 +250,7 @@ private:
 
 int main() {
     #ifdef CALCULATOR_DEBUG
-    std::cout << Calculator::calculate("-(3 + (-2.5))%");
+    std::cout << Calculator::calculate("cos(2π)");
     #endif
     return 0;
 }
